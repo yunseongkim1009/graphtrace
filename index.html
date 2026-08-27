@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GraphTrace — Image → Desmos (6 forms)</title>
+<title>GraphTrace — Image → Desmos</title>
 <style>
   :root{
     --bg:#0d1117; --panel:#141b24; --panel2:#0f151d; --line:#20303f;
@@ -92,6 +92,20 @@
     </div>
 
     <div class="sec">
+      <h2>✨ Auto-trace</h2>
+      <button class="up" id="auto" style="background:linear-gradient(90deg,#845ef7,#5c7cfa)">✨ Auto-trace image → graphs</button>
+      <div class="lab"><span>Ink threshold</span><span id="thv">128</span></div>
+      <input id="thresh" type="range" min="20" max="240" value="128">
+      <div class="lab"><span>Detail</span><span id="detv">med</span></div>
+      <input id="detail" type="range" min="40" max="320" value="160">
+      <label class="btn" style="cursor:pointer;margin-top:6px;justify-content:flex-start;gap:8px">
+        <input type="checkbox" id="invert" style="accent-color:var(--accent)"> Light drawing on dark
+      </label>
+      <p style="font-size:11px;color:var(--dim);margin:8px 2px 0;line-height:1.5">
+        Fits the image as function pieces (line / parabola / cubic). Position the image first, then trace.</p>
+    </div>
+
+    <div class="sec">
       <h2>Curve tools</h2>
       <button class="btn tool on" data-tool="line-si"><span class="swatch" style="background:#4dabf7"></span>Slope-intercept<span class="k">1</span></button>
       <button class="btn tool" data-tool="std"><span class="swatch" style="background:#ff6b6b"></span>Standard<span class="k">2</span></button>
@@ -100,6 +114,14 @@
       <button class="btn tool" data-tool="inverse"><span class="swatch" style="background:#cc5de8"></span>Inverse<span class="k">5</span></button>
       <button class="btn tool" data-tool="circle"><span class="swatch" style="background:#ff922b"></span>Circle<span class="k">6</span></button>
       <p style="font-size:11px;color:var(--dim);margin:8px 2px 0;line-height:1.5">Standard · Vertex · Intercept all draw <b style="color:#9fb4c7">parabolas</b>.</p>
+    </div>
+
+    <div class="sec">
+      <h2>More curves</h2>
+      <button class="btn tool" data-tool="cubic"><span class="swatch" style="background:#f783ac"></span>Cubic<span class="k">7</span></button>
+      <button class="btn tool" data-tool="abs"><span class="swatch" style="background:#a29bfe"></span>Absolute value<span class="k">8</span></button>
+      <button class="btn tool" data-tool="sqrt"><span class="swatch" style="background:#63e6be"></span>Square root<span class="k">9</span></button>
+      <button class="btn tool" data-tool="ellipse"><span class="swatch" style="background:#fab005"></span>Ellipse<span class="k">0</span></button>
     </div>
 
     <div class="sec">
@@ -155,7 +177,8 @@ const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
 const stage=document.getElementById('stage');
 
 // ---------- state ----------
-const COLORS={'line-si':'#4dabf7','std':'#ff6b6b','vertex':'#51cf66','intercept':'#ffd43b','inverse':'#cc5de8','circle':'#ff922b'};
+const COLORS={'line-si':'#4dabf7','std':'#ff6b6b','vertex':'#51cf66','intercept':'#ffd43b','inverse':'#cc5de8','circle':'#ff922b',
+  'cubic':'#f783ac','abs':'#a29bfe','sqrt':'#63e6be','ellipse':'#fab005'};
 const state={
   tool:'line-si',
   view:{ox:0,oy:0,scale:40},        // ox,oy = world coords at canvas centre; scale = px/unit
@@ -173,6 +196,10 @@ const TOOLS={
   'intercept':{n:3, name:'Intercept',       hint:'Click <b>2 x-intercepts</b>, then a <b>point on the curve</b>.'},
   'inverse':  {n:3, name:'Inverse',         hint:'Click <b>3 points</b> along a 1/x curve (same branch).'},
   'circle':   {n:2, name:'Circle',          hint:'Click the <b>center</b>, then a point on the <b>edge</b>.'},
+  'cubic':    {n:4, name:'Cubic',           hint:'Click <b>4 points</b> along an S-shaped curve.'},
+  'abs':      {n:2, name:'Absolute value',  hint:'Click the <b>corner (vertex)</b>, then <b>one point</b> on an arm.'},
+  'sqrt':     {n:2, name:'Square root',     hint:'Click the <b>start point</b>, then <b>one point</b> to the right.'},
+  'ellipse':  {n:2, name:'Ellipse',         hint:'Click the <b>center</b>, then a <b>corner</b> (sets width & height).'},
   'view':     {n:0, name:'Pan',             hint:'Drag to pan. Wheel to zoom.'},
   'move-img': {n:0, name:'Move image',      hint:'Drag the image to reposition it.'}
 };
@@ -216,7 +243,35 @@ function factorV(v,c){
   const cc=fmt(Math.abs(c));
   return c>1e-9?`(${v}-${cc})`:c<-1e-9?`(${v}+${cc})`:`(${v})`;
 }
+function innerLin(h){ // like factor but no parens: "x-2" / "x+2" / "x"
+  const cc=fmt(Math.abs(h));
+  return h>1e-9?`x-${cc}`:h<-1e-9?`x+${cc}`:'x';
+}
 const konst=k=> Math.abs(k)<1e-9?'':(k>0?'+':'-')+fmt(Math.abs(k));
+
+// ---------- generic solvers / least squares ----------
+function gauss(A,b){ // solve A x = b, A is n×n (mutated), returns x or null
+  const n=A.length;
+  for(let i=0;i<n;i++){
+    let p=i; for(let r=i+1;r<n;r++) if(Math.abs(A[r][i])>Math.abs(A[p][i])) p=r;
+    if(Math.abs(A[p][i])<1e-12) return null;
+    [A[i],A[p]]=[A[p],A[i]]; [b[i],b[p]]=[b[p],b[i]];
+    for(let r=0;r<n;r++){ if(r===i) continue; const f=A[r][i]/A[i][i];
+      for(let c=i;c<n;c++) A[r][c]-=f*A[i][c]; b[r]-=f*b[i]; }
+  }
+  return A.map((row,i)=>b[i]/row[i]);
+}
+function polyfit(pts,deg){ // returns coeffs [c0..cdeg] (ascending) via normal equations
+  const n=deg+1, A=Array.from({length:n},()=>new Array(n).fill(0)), B=new Array(n).fill(0);
+  for(const p of pts){
+    const xp=[]; let v=1; for(let k=0;k<2*deg+1;k++){xp.push(v);v*=p.x;}
+    for(let i=0;i<n;i++){ for(let j=0;j<n;j++) A[i][j]+=xp[i+j]; B[i]+=xp[i]*p.y; }
+  }
+  return gauss(A,B);
+}
+const polyval=(c,x)=>c.reduce((s,ci,i)=>s+ci*Math.pow(x,i),0);
+function rmse(pts,c){ let s=0; for(const p of pts){ const d=p.y-polyval(c,p.x); s+=d*d; } return Math.sqrt(s/pts.length); }
+const median=a=>{ const s=a.slice().sort((x,y)=>x-y); const m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; };
 
 // ---------- linear solvers ----------
 function solve2(a,b,c, d,e,f){ // ax+by=c ; dx+ey=f
@@ -285,6 +340,40 @@ function build(tool,pts){
     return {tool,eq,circle:{h,k,r},pts:pts.map(p=>({x:p.x,y:p.y})),
             color:COLORS.circle,desmos:eq,restr:''};
   }
+  if(tool==='cubic'){
+    const c=polyfit(pts,3);
+    if(!c) return {err:'Those 4 points don’t define a cubic.'};
+    const [d,cc,b,a]=c;
+    const xs=pts.map(p=>p.x), xr=[Math.min(...xs),Math.max(...xs)];
+    const eq=poly([{c:a,v:'x^3'},{c:b,v:'x^2'},{c:cc,v:'x'},{c:d,v:''}]);
+    return curve(tool, eq, x=>polyval(c,x), xr, pts);
+  }
+  if(tool==='abs'){
+    const [V,P]=pts; const h=V.x,k=V.y;
+    if(Math.abs(P.x-h)<1e-9) return {err:'Second point can’t be directly above the corner.'};
+    const a=(P.y-k)/Math.abs(P.x-h);
+    const hw=Math.abs(P.x-h), xr=[h-hw,h+hw];
+    const eq='y='+aStr(a)+'|'+innerLin(h)+'|'+konst(k);
+    const tex='y='+aStr(a)+'\\left|'+innerLin(h)+'\\right|'+konst(k);
+    return curve(tool, eq, x=>a*Math.abs(x-h)+k, xr, pts, tex);
+  }
+  if(tool==='sqrt'){
+    const [S,P]=pts; const h=S.x,k=S.y;
+    if(P.x-h<=1e-9) return {err:'Second point must be to the right of the start.'};
+    const a=(P.y-k)/Math.sqrt(P.x-h);
+    const xr=[h,P.x];
+    const eq='y='+aStr(a)+'√('+innerLin(h)+')'+konst(k);
+    const tex='y='+aStr(a)+'\\sqrt{'+innerLin(h)+'}'+konst(k);
+    return curve(tool, eq, x=> x>=h? a*Math.sqrt(x-h)+k : NaN, xr, pts, tex);
+  }
+  if(tool==='ellipse'){
+    const [C,E]=pts; const h=C.x,k=C.y,a=Math.abs(E.x-h),b=Math.abs(E.y-k);
+    if(a<1e-6||b<1e-6) return {err:'Click a corner away from the center (needs width & height).'};
+    const eq=`${factorV('x',h)}²/${fmt(a*a)}+${factorV('y',k)}²/${fmt(b*b)}=1`;
+    const tex=`\\frac{${factorV('x',h)}^2}{${fmt(a*a)}}+\\frac{${factorV('y',k)}^2}{${fmt(b*b)}}=1`;
+    return {tool,eq,ellipse:{h,k,a,b},pts:pts.map(p=>({x:p.x,y:p.y})),
+            color:COLORS.ellipse,desmos:tex,restr:''};
+  }
   }catch(e){ return {err:'Could not fit those points.'}; }
 }
 function solve3(M,r){
@@ -302,11 +391,11 @@ function det3(m){
        - m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0])
        + m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]);
 }
-function curve(tool,eq,fn,xr,pts){
+function curve(tool,eq,fn,xr,pts,tex){
   const lo=fmt(xr[0]), hi=fmt(xr[1]);
   const restr=` {${lo}<x<${hi}}`;                          // pretty, for the panel
   const restrTex=`\\left\\{${lo}<x<${hi}\\right\\}`;       // real Desmos syntax, for copy
-  return {tool,eq,fn,xr,pts:pts.map(p=>({x:p.x,y:p.y})),color:COLORS[tool],desmos:eq+restrTex,restr};
+  return {tool,eq,fn,xr,pts:pts.map(p=>({x:p.x,y:p.y})),color:COLORS[tool],desmos:(tex||eq)+restrTex,restr};
 }
 
 // ---------- drawing ----------
@@ -336,7 +425,11 @@ function draw(){
   drawGrid();
 
   // finished curves
-  for(const c of state.curves){ if(c.circle) drawCircle(c); else plot(c.fn,c.xr,c.color,2.4); }
+  for(const c of state.curves){
+    if(c.circle) drawCircle(c);
+    else if(c.ellipse) drawEllipse(c);
+    else plot(c.fn,c.xr,c.color,2.4);
+  }
   // control points of finished curves (faint)
   for(const c of state.curves) for(const p of c.pts) marker(p,c.color,2.5,.5);
 
@@ -411,6 +504,13 @@ function drawCircle(c){
   const [sx,sy]=w2s(c.circle.h,c.circle.k);
   ctx.lineWidth=2.4; ctx.strokeStyle=c.color; ctx.lineJoin='round';
   ctx.beginPath(); ctx.arc(sx,sy,Math.max(0,c.circle.r*state.view.scale),0,Math.PI*2); ctx.stroke();
+}
+function drawEllipse(c){
+  const [sx,sy]=w2s(c.ellipse.h,c.ellipse.k);
+  ctx.lineWidth=2.4; ctx.strokeStyle=c.color; ctx.lineJoin='round';
+  ctx.beginPath();
+  ctx.ellipse(sx,sy,Math.max(0,c.ellipse.a*state.view.scale),Math.max(0,c.ellipse.b*state.view.scale),0,0,Math.PI*2);
+  ctx.stroke();
 }
 function marker(p,color,r,alpha){
   const [sx,sy]=w2s(p.x,p.y);
@@ -508,7 +608,8 @@ document.getElementById('reset').onclick=()=>{ state.view={ox:0,oy:0,scale:40}; 
 // keyboard
 window.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT') return;
-  const map={'1':'line-si','2':'std','3':'vertex','4':'intercept','5':'inverse','6':'circle','v':'view','m':'move-img'};
+  const map={'1':'line-si','2':'std','3':'vertex','4':'intercept','5':'inverse','6':'circle',
+    '7':'cubic','8':'abs','9':'sqrt','0':'ellipse','v':'view','m':'move-img'};
   const k=e.key.toLowerCase();
   if(map[k]) setTool(map[k]);
   if(k==='u'){ document.getElementById('undo').click(); }
@@ -559,8 +660,61 @@ document.getElementById('imgscale').oninput=e=>{
   draw();
 };
 
+// ---------- auto-trace ----------
+document.getElementById('thresh').oninput=e=>document.getElementById('thv').textContent=e.target.value;
+document.getElementById('detail').oninput=e=>{
+  const v=+e.target.value; document.getElementById('detv').textContent=v<110?'low':v<230?'med':'high';
+};
+document.getElementById('auto').onclick=autoTrace;
+function autoTrace(){
+  if(!state.img) return toast('Upload an image first',true);
+  const thresh=+document.getElementById('thresh').value;
+  const buckets=+document.getElementById('detail').value;
+  const invert=document.getElementById('invert').checked;
+  const iw=state.img.width, ih=state.img.height;
+  const scl=Math.min(1,700/iw), cw=Math.max(2,Math.round(iw*scl)), ch=Math.max(2,Math.round(ih*scl));
+  const oc=document.createElement('canvas'); oc.width=cw; oc.height=ch;
+  const octx=oc.getContext('2d',{willReadFrequently:true});
+  octx.drawImage(state.img,0,0,cw,ch);
+  let data; try{ data=octx.getImageData(0,0,cw,ch).data; }catch(err){ return toast('Browser blocked reading this image',true); }
+  const worldW=state.imgT.w, worldH=worldW*ih/iw;
+  const cols=Array.from({length:buckets},()=>[]);
+  for(let py=0;py<ch;py++) for(let px=0;px<cw;px++){
+    const i=(py*cw+px)*4; if(data[i+3]<20) continue;
+    const lum=0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];
+    if(invert? lum>thresh : lum<thresh){
+      const bi=Math.min(buckets-1,Math.floor(px/cw*buckets));
+      cols[bi].push(state.imgT.y-(py+0.5)/ch*worldH);
+    }
+  }
+  const samples=cols.map((ys,bi)=> ys.length? {x:state.imgT.x+(bi+0.5)/buckets*worldW,y:median(ys)} : null);
+  const runs=[]; let cur=[], gap=0;
+  for(const s of samples){ if(s){cur.push(s);gap=0;} else {gap++; if(gap>2&&cur.length){runs.push(cur);cur=[];}} }
+  if(cur.length) runs.push(cur);
+  const minRun=Math.max(5,Math.round(buckets*0.03));
+  let added=0;
+  for(const run of runs){
+    if(run.length<minRun) continue;
+    const c1=polyfit(run,1), c2=run.length>=4?polyfit(run,2):null, c3=run.length>=6?polyfit(run,3):null;
+    let best=c1?{c:c1,deg:1,e:rmse(run,c1)}:null;
+    if(c2){ const e=rmse(run,c2); if(!best||e<best.e*0.8) best={c:c2,deg:2,e}; }
+    if(c3){ const e=rmse(run,c3); if(!best||e<best.e*0.8) best={c:c3,deg:3,e}; }
+    if(!best) continue;
+    const xs=run.map(p=>p.x), xr=[Math.min(...xs),Math.max(...xs)], ends=[run[0],run[run.length-1]];
+    const fn=x=>polyval(best.c,x);
+    let cv;
+    if(best.deg===1){ const [b,m]=best.c; cv=curve('line-si',poly([{c:m,v:'x'},{c:b,v:''}]),fn,xr,ends); }
+    else if(best.deg===2){ const [c0,c1b,c2b]=best.c; cv=curve('std',poly([{c:c2b,v:'x^2'},{c:c1b,v:'x'},{c:c0,v:''}]),fn,xr,ends); }
+    else { const [d,cc,b,a]=best.c; cv=curve('cubic',poly([{c:a,v:'x^3'},{c:b,v:'x^2'},{c:cc,v:'x'},{c:d,v:''}]),fn,xr,ends); }
+    state.curves.push(cv); added++;
+  }
+  renderList(); draw();
+  toast(added? `Auto-traced ${added} piece${added>1?'s':''}` : 'No strokes found — try adjusting threshold or “light on dark”', !added);
+}
+
 // ---------- output list ----------
-const NAMES={'line-si':'Slope-intercept','std':'Standard','vertex':'Vertex','intercept':'Intercept','inverse':'Inverse','circle':'Circle'};
+const NAMES={'line-si':'Slope-intercept','std':'Standard','vertex':'Vertex','intercept':'Intercept','inverse':'Inverse','circle':'Circle',
+  'cubic':'Cubic','abs':'Absolute value','sqrt':'Square root','ellipse':'Ellipse'};
 function renderList(){
   const list=document.getElementById('list');
   document.getElementById('count').textContent=state.curves.length;
