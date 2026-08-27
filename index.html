@@ -303,8 +303,10 @@ function det3(m){
        + m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]);
 }
 function curve(tool,eq,fn,xr,pts){
-  const restr=` {${fmt(xr[0])}<x<${fmt(xr[1])}}`;
-  return {tool,eq,fn,xr,pts:pts.map(p=>({x:p.x,y:p.y})),color:COLORS[tool],desmos:eq+restr,restr};
+  const lo=fmt(xr[0]), hi=fmt(xr[1]);
+  const restr=` {${lo}<x<${hi}}`;                          // pretty, for the panel
+  const restrTex=`\\left\\{${lo}<x<${hi}\\right\\}`;       // real Desmos syntax, for copy
+  return {tool,eq,fn,xr,pts:pts.map(p=>({x:p.x,y:p.y})),color:COLORS[tool],desmos:eq+restrTex,restr};
 }
 
 // ---------- drawing ----------
