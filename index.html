@@ -178,7 +178,7 @@ const stage=document.getElementById('stage');
 
 // ---------- state ----------
 const COLORS={'line-si':'#4dabf7','std':'#ff6b6b','vertex':'#51cf66','intercept':'#ffd43b','inverse':'#cc5de8','circle':'#ff922b',
-  'cubic':'#f783ac','abs':'#a29bfe','sqrt':'#63e6be','ellipse':'#fab005'};
+  'cubic':'#f783ac','abs':'#a29bfe','sqrt':'#63e6be','ellipse':'#fab005','vline':'#74c0fc'};
 const state={
   tool:'line-si',
   view:{ox:0,oy:0,scale:40},        // ox,oy = world coords at canvas centre; scale = px/unit
@@ -428,6 +428,7 @@ function draw(){
   for(const c of state.curves){
     if(c.circle) drawCircle(c);
     else if(c.ellipse) drawEllipse(c);
+    else if(c.vline) drawVline(c);
     else plot(c.fn,c.xr,c.color,2.4);
   }
   // control points of finished curves (faint)
@@ -511,6 +512,11 @@ function drawEllipse(c){
   ctx.beginPath();
   ctx.ellipse(sx,sy,Math.max(0,c.ellipse.a*state.view.scale),Math.max(0,c.ellipse.b*state.view.scale),0,0,Math.PI*2);
   ctx.stroke();
+}
+function drawVline(c){
+  const [sx,sy0]=w2s(c.vline.x,c.vline.y0), [,sy1]=w2s(c.vline.x,c.vline.y1);
+  ctx.lineWidth=2.4; ctx.strokeStyle=c.color;
+  ctx.beginPath(); ctx.moveTo(sx,sy0); ctx.lineTo(sx,sy1); ctx.stroke();
 }
 function marker(p,color,r,alpha){
   const [sx,sy]=w2s(p.x,p.y);
@@ -669,52 +675,173 @@ document.getElementById('auto').onclick=autoTrace;
 function autoTrace(){
   if(!state.img) return toast('Upload an image first',true);
   const thresh=+document.getElementById('thresh').value;
-  const buckets=+document.getElementById('detail').value;
+  const detail=+document.getElementById('detail').value;
   const invert=document.getElementById('invert').checked;
   const iw=state.img.width, ih=state.img.height;
-  const scl=Math.min(1,700/iw), cw=Math.max(2,Math.round(iw*scl)), ch=Math.max(2,Math.round(ih*scl));
+  const scl=Math.min(1,480/iw), cw=Math.max(2,Math.round(iw*scl)), ch=Math.max(2,Math.round(ih*scl));
   const oc=document.createElement('canvas'); oc.width=cw; oc.height=ch;
   const octx=oc.getContext('2d',{willReadFrequently:true});
   octx.drawImage(state.img,0,0,cw,ch);
   let data; try{ data=octx.getImageData(0,0,cw,ch).data; }catch(err){ return toast('Browser blocked reading this image',true); }
-  const worldW=state.imgT.w, worldH=worldW*ih/iw;
-  const cols=Array.from({length:buckets},()=>[]);
-  for(let py=0;py<ch;py++) for(let px=0;px<cw;px++){
-    const i=(py*cw+px)*4; if(data[i+3]<20) continue;
+
+  // 1. ink mask (dark-on-light, or inverted)
+  const mask=new Uint8Array(cw*ch);
+  for(let p=0;p<cw*ch;p++){
+    const i=p*4; if(data[i+3]<20) continue;
     const lum=0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];
-    if(invert? lum>thresh : lum<thresh){
-      const bi=Math.min(buckets-1,Math.floor(px/cw*buckets));
-      cols[bi].push(state.imgT.y-(py+0.5)/ch*worldH);
+    if(invert? lum>thresh : lum<thresh) mask[p]=1;
+  }
+  // 2. thin to 1px skeleton (Zhang–Suen)
+  thinZS(mask,cw,ch);
+
+  // 3. trace skeleton into ordered pixel paths
+  const paths=traceSkeleton(mask,cw,ch);
+
+  // 4. geometry helpers
+  const worldW=state.imgT.w, worldH=worldW*ih/iw;
+  const toW=p=>({x:state.imgT.x+(p.x+0.5)/cw*worldW, y:state.imgT.y-(p.y+0.5)/ch*worldH});
+  const eps=Math.max(0.6,Math.min(3.4, 3.4-(detail-40)/280*2.8));   // detail slider → RDP epsilon (px)
+  const minLenPx=Math.max(10, cw*0.02);
+  const CAP=60;
+  const out=[]; let capped=false;
+
+  for(let path of paths){
+    if(path.length<4) continue;
+    const rough=pathLen(path);
+    if(rough<minLenPx) continue;
+    path=rdp(path,eps);
+    const wp=path.map(toW);
+    if(wp.length<2) continue;
+    // closed loop?
+    const d0=Math.hypot(wp[0].x-wp[wp.length-1].x, wp[0].y-wp[wp.length-1].y);
+    const bb=bbox(wp), diag=Math.hypot(bb.w,bb.h);
+    if(wp.length>=8 && d0<0.20*diag){
+      const cc=fitClosed(wp); if(cc){ out.push(cc); continue; }
+    }
+    for(const run of splitRuns(wp)){
+      const cv=fitRun(run); if(cv) out.push(cv);
     }
   }
-  const samples=cols.map((ys,bi)=> ys.length? {x:state.imgT.x+(bi+0.5)/buckets*worldW,y:median(ys)} : null);
-  const runs=[]; let cur=[], gap=0;
-  for(const s of samples){ if(s){cur.push(s);gap=0;} else {gap++; if(gap>2&&cur.length){runs.push(cur);cur=[];}} }
-  if(cur.length) runs.push(cur);
-  const minRun=Math.max(5,Math.round(buckets*0.03));
+  // add (respect cap)
   let added=0;
-  for(const run of runs){
-    if(run.length<minRun) continue;
-    const c1=polyfit(run,1), c2=run.length>=4?polyfit(run,2):null, c3=run.length>=6?polyfit(run,3):null;
-    let best=c1?{c:c1,deg:1,e:rmse(run,c1)}:null;
-    if(c2){ const e=rmse(run,c2); if(!best||e<best.e*0.8) best={c:c2,deg:2,e}; }
-    if(c3){ const e=rmse(run,c3); if(!best||e<best.e*0.8) best={c:c3,deg:3,e}; }
-    if(!best) continue;
-    const xs=run.map(p=>p.x), xr=[Math.min(...xs),Math.max(...xs)], ends=[run[0],run[run.length-1]];
-    const fn=x=>polyval(best.c,x);
-    let cv;
-    if(best.deg===1){ const [b,m]=best.c; cv=curve('line-si',poly([{c:m,v:'x'},{c:b,v:''}]),fn,xr,ends); }
-    else if(best.deg===2){ const [c0,c1b,c2b]=best.c; cv=curve('std',poly([{c:c2b,v:'x^2'},{c:c1b,v:'x'},{c:c0,v:''}]),fn,xr,ends); }
-    else { const [d,cc,b,a]=best.c; cv=curve('cubic',poly([{c:a,v:'x^3'},{c:b,v:'x^2'},{c:cc,v:'x'},{c:d,v:''}]),fn,xr,ends); }
-    state.curves.push(cv); added++;
-  }
+  for(const cv of out){ if(added>=CAP){capped=true;break;} state.curves.push(cv); added++; }
   renderList(); draw();
-  toast(added? `Auto-traced ${added} piece${added>1?'s':''}` : 'No strokes found — try adjusting threshold or “light on dark”', !added);
+  if(!added) toast('No strokes found — adjust the ink threshold, or toggle “light on dark”',true);
+  else toast(`Auto-traced ${added} piece${added>1?'s':''}`+(capped?` (capped at ${CAP})`:''));
+}
+// --- Zhang–Suen thinning ---
+function thinZS(m,cw,ch){
+  const idx=(x,y)=>y*cw+x;
+  let changed=true, guard=0;
+  while(changed && guard++<60){
+    changed=false;
+    for(let s=0;s<2;s++){
+      const del=[];
+      for(let y=1;y<ch-1;y++) for(let x=1;x<cw-1;x++){
+        if(!m[idx(x,y)]) continue;
+        const p2=m[idx(x,y-1)],p3=m[idx(x+1,y-1)],p4=m[idx(x+1,y)],p5=m[idx(x+1,y+1)],
+              p6=m[idx(x,y+1)],p7=m[idx(x-1,y+1)],p8=m[idx(x-1,y)],p9=m[idx(x-1,y-1)];
+        const B=p2+p3+p4+p5+p6+p7+p8+p9; if(B<2||B>6) continue;
+        const seq=[p2,p3,p4,p5,p6,p7,p8,p9]; let A=0;
+        for(let i=0;i<8;i++) if(seq[i]===0&&seq[(i+1)%8]===1) A++;
+        if(A!==1) continue;
+        if(s===0){ if(p2*p4*p6) continue; if(p4*p6*p8) continue; }
+        else     { if(p2*p4*p8) continue; if(p2*p6*p8) continue; }
+        del.push(idx(x,y));
+      }
+      if(del.length){ changed=true; for(const d of del) m[d]=0; }
+    }
+  }
+}
+// --- trace skeleton: nearest-neighbour walk, endpoints first ---
+function traceSkeleton(m,cw,ch){
+  const nb=(x,y)=>{let c=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){if(dx||dy){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<cw&&Y<ch&&m[Y*cw+X])c++;}}return c;};
+  const consume=(x,y)=>{ m[y*cw+x]=0; };
+  const nearest=(cx,cy,R)=>{let best=null,bd=1e9;for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){if(!dx&&!dy)continue;const x=cx+dx,y=cy+dy;if(x<0||y<0||x>=cw||y>=ch)continue;if(m[y*cw+x]){const d=dx*dx+dy*dy;if(d<bd){bd=d;best={x,y};}}}return best;};
+  const grow=(sx,sy)=>{const path=[{x:sx,y:sy}];consume(sx,sy);let cx=sx,cy=sy;for(let i=0;i<50000;i++){const n=nearest(cx,cy,2);if(!n)break;consume(n.x,n.y);path.push(n);cx=n.x;cy=n.y;}return path;};
+  const paths=[];
+  // pass 1: seed from endpoints (degree 1)
+  for(let y=1;y<ch-1;y++) for(let x=1;x<cw-1;x++){ if(m[y*cw+x] && nb(x,y)===1){ paths.push(grow(x,y)); } }
+  // pass 2: remaining pixels (loops / junctions)
+  for(let y=0;y<ch;y++) for(let x=0;x<cw;x++){ if(m[y*cw+x]){ paths.push(grow(x,y)); } }
+  return paths;
+}
+// --- Ramer–Douglas–Peucker (iterative) ---
+function rdp(pts,eps){
+  if(pts.length<3) return pts.slice();
+  const keep=new Uint8Array(pts.length); keep[0]=keep[pts.length-1]=1;
+  const stack=[[0,pts.length-1]];
+  while(stack.length){
+    const [a,b]=stack.pop(); let md=-1,mi=-1;
+    const ax=pts[a].x,ay=pts[a].y,bx=pts[b].x,by=pts[b].y;
+    const dx=bx-ax,dy=by-ay, len=Math.hypot(dx,dy)||1;
+    for(let i=a+1;i<b;i++){
+      const d=Math.abs((pts[i].x-ax)*dy-(pts[i].y-ay)*dx)/len;
+      if(d>md){md=d;mi=i;}
+    }
+    if(md>eps){ keep[mi]=1; stack.push([a,mi],[mi,b]); }
+  }
+  const o=[]; for(let i=0;i<pts.length;i++) if(keep[i]) o.push(pts[i]); return o;
+}
+function pathLen(p){let s=0;for(let i=1;i<p.length;i++)s+=Math.hypot(p[i].x-p[i-1].x,p[i].y-p[i-1].y);return s;}
+function bbox(p){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const q of p){x0=Math.min(x0,q.x);y0=Math.min(y0,q.y);x1=Math.max(x1,q.x);y1=Math.max(y1,q.y);}return{w:x1-x0,h:y1-y0};}
+// split a simplified path at x-direction reversals → each run is a function of x
+function splitRuns(path){
+  if(path.length<2) return [path];
+  const runs=[]; let run=[path[0]], dir=0;
+  for(let i=1;i<path.length;i++){
+    const dx=path[i].x-path[i-1].x;
+    const d=Math.abs(dx)<1e-9?dir:(dx>0?1:-1);
+    if(dir===0) dir=d;
+    if(d!==0 && d!==dir){ runs.push(run); run=[path[i-1]]; dir=d; }
+    run.push(path[i]);
+  }
+  runs.push(run); return runs;
+}
+function fitRun(run){
+  if(run.length<2) return null;
+  const xs=run.map(p=>p.x), ys=run.map(p=>p.y);
+  const xmin=Math.min(...xs),xmax=Math.max(...xs),ymin=Math.min(...ys),ymax=Math.max(...ys);
+  const w=xmax-xmin,h=ymax-ymin;
+  if(w<0.2*h){ // near-vertical → vertical line (x=c, restricted in y)
+    const cxm=(xmin+xmax)/2, lo=fmt(ymin),hi=fmt(ymax);
+    return {tool:'vline',eq:`x=${fmt(cxm)}`,vline:{x:cxm,y0:ymin,y1:ymax},
+            pts:[run[0],run[run.length-1]].map(p=>({x:p.x,y:p.y})),color:COLORS.vline,
+            desmos:`x=${fmt(cxm)}\\left\\{${lo}<y<${hi}\\right\\}`,restr:` {${lo}<y<${hi}}`};
+  }
+  const pts=run.slice().sort((a,b)=>a.x-b.x);
+  const c1=polyfit(pts,1), c2=pts.length>=4?polyfit(pts,2):null, c3=pts.length>=6?polyfit(pts,3):null;
+  let best=c1?{c:c1,deg:1,e:rmse(pts,c1)}:null;
+  if(c2){const e=rmse(pts,c2); if(!best||e<best.e*0.8)best={c:c2,deg:2,e};}
+  if(c3){const e=rmse(pts,c3); if(!best||e<best.e*0.8)best={c:c3,deg:3,e};}
+  if(!best) return null;
+  const xr=[xmin,xmax], fn=x=>polyval(best.c,x), ends=[pts[0],pts[pts.length-1]];
+  if(best.deg===1){const[b,m]=best.c; return curve('line-si',poly([{c:m,v:'x'},{c:b,v:''}]),fn,xr,ends);}
+  if(best.deg===2){const[c0,c1b,c2b]=best.c; return curve('std',poly([{c:c2b,v:'x^2'},{c:c1b,v:'x'},{c:c0,v:''}]),fn,xr,ends);}
+  const[d,cc,b,a]=best.c; return curve('cubic',poly([{c:a,v:'x^3'},{c:b,v:'x^2'},{c:cc,v:'x'},{c:d,v:''}]),fn,xr,ends);
+}
+function fitClosed(path){
+  const n=path.length; let cx=0,cy=0; for(const p of path){cx+=p.x;cy+=p.y;} cx/=n;cy/=n;
+  const rs=path.map(p=>Math.hypot(p.x-cx,p.y-cy)); const rm=rs.reduce((a,b)=>a+b,0)/n;
+  if(rm<1e-6) return null;
+  const rstd=Math.sqrt(rs.reduce((a,b)=>a+(b-rm)*(b-rm),0)/n);
+  if(rstd/rm<0.14){
+    const eq=`${factorV('x',cx)}^2+${factorV('y',cy)}^2=${fmt(rm*rm)}`;
+    return {tool:'circle',eq,circle:{h:cx,k:cy,r:rm},pts:[],color:COLORS.circle,desmos:eq,restr:''};
+  }
+  if(rstd/rm<0.36){
+    const a=Math.max(...path.map(p=>Math.abs(p.x-cx))), b=Math.max(...path.map(p=>Math.abs(p.y-cy)));
+    if(a<1e-6||b<1e-6) return null;
+    const eq=`${factorV('x',cx)}²/${fmt(a*a)}+${factorV('y',cy)}²/${fmt(b*b)}=1`;
+    const tex=`\\frac{${factorV('x',cx)}^2}{${fmt(a*a)}}+\\frac{${factorV('y',cy)}^2}{${fmt(b*b)}}=1`;
+    return {tool:'ellipse',eq,ellipse:{h:cx,k:cy,a,b},pts:[],color:COLORS.ellipse,desmos:tex,restr:''};
+  }
+  return null;
 }
 
 // ---------- output list ----------
 const NAMES={'line-si':'Slope-intercept','std':'Standard','vertex':'Vertex','intercept':'Intercept','inverse':'Inverse','circle':'Circle',
-  'cubic':'Cubic','abs':'Absolute value','sqrt':'Square root','ellipse':'Ellipse'};
+  'cubic':'Cubic','abs':'Absolute value','sqrt':'Square root','ellipse':'Ellipse','vline':'Vertical line'};
 function renderList(){
   const list=document.getElementById('list');
   document.getElementById('count').textContent=state.curves.length;

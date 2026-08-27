@@ -6,7 +6,9 @@ Single file, no dependencies, no build step. Just open `index.html`.
 
 ## Auto-trace
 
-Hit **✨ Auto-trace** and GraphTrace reads the image itself: it scans the ink column by column, splits it into strokes, and least-squares-fits each piece as a line, parabola, or cubic. Tune it with the **Ink threshold** slider, the **Detail** slider, and the **Light drawing on dark** toggle. Position the image where you want it first, then trace. (Best on function-like drawings that pass the vertical-line test.)
+Hit **✨ Auto-trace** and GraphTrace reads the image itself. The pipeline: threshold the ink → **skeletonize** it to 1px centerlines (Zhang–Suen thinning) → **trace** each stroke as an ordered path → simplify (Ramer–Douglas–Peucker) → split each path at its turning points into function-of-x pieces → least-squares-fit each piece as a line, parabola, or cubic. Round closed loops are recognised as **circles/ellipses**, and near-vertical strokes become `x = c` lines.
+
+Because it follows the actual strokes (not columns), it handles multi-stroke drawings, curves that double back, and closed shapes. Tune it with the **Ink threshold** slider (what counts as ink), the **Detail** slider (faithful vs. smooth), and the **Light drawing on dark** toggle. Position the image where you want it first, then trace.
 
 ## Forms (manual tools)
 
