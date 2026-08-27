@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GraphTrace — Image → Desmos (6 forms)</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#141b24; --panel2:#0f151d; --line:#20303f;
+    --ink:#e7eef6; --dim:#8aa0b4; --accent:#4dabf7; --accent2:#22d3ee;
+    --danger:#ff6b6b; --ok:#51cf66;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;overflow:hidden}
+  .app{display:grid;grid-template-columns:230px 1fr 320px;grid-template-rows:100vh;height:100vh}
+  /* ---- left rail ---- */
+  .rail{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto}
+  .brand{padding:16px 16px 12px;border-bottom:1px solid var(--line)}
+  .brand h1{margin:0;font-size:17px;letter-spacing:.3px}
+  .brand span{color:var(--accent2)}
+  .brand p{margin:4px 0 0;font-size:11px;color:var(--dim);line-height:1.4}
+  .sec{padding:12px 14px;border-bottom:1px solid var(--line)}
+  .sec h2{margin:0 0 8px;font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);font-weight:700}
+  .btn{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:9px 10px;margin:5px 0;
+    background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--ink);
+    font-size:13px;cursor:pointer;transition:.12s;line-height:1.1}
+  .btn:hover{border-color:var(--accent);background:#16222f}
+  .btn.on{border-color:var(--accent);background:linear-gradient(90deg,#173247,#141b24);box-shadow:inset 0 0 0 1px var(--accent)}
+  .btn .k{margin-left:auto;font-size:10px;color:var(--dim);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+  .swatch{width:14px;height:14px;border-radius:4px;flex:none;box-shadow:0 0 0 1px #0006}
+  .mini{display:flex;gap:6px}
+  .mini .btn{margin:0}
+  .up{display:block;text-align:center;background:linear-gradient(90deg,var(--accent),var(--accent2));
+    color:#06121c;font-weight:700;border:none;border-radius:9px;padding:11px;cursor:pointer;font-size:13px}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .lab{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin:10px 0 3px}
+  /* ---- canvas ---- */
+  .stage{position:relative;background:var(--bg)}
+  canvas{display:block;width:100%;height:100%;cursor:crosshair}
+  .hint{position:absolute;left:14px;bottom:14px;right:14px;display:flex;gap:10px;align-items:center;
+    background:#0d1520cc;backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:10px;
+    padding:9px 13px;font-size:12.5px;color:var(--ink);pointer-events:none}
+  .hint b{color:var(--accent2)}
+  .hint .coord{margin-left:auto;color:var(--dim);font-variant-numeric:tabular-nums;font-size:11.5px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none}
+  .drop{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    background:#0d1117d0;border:3px dashed var(--accent);font-size:18px;color:var(--accent);z-index:5}
+  .drop.show{display:flex}
+  /* ---- right ---- */
+  .out{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+  .out h2{margin:0;padding:14px 16px;font-size:13px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+  .out h2 .count{margin-left:auto;font-size:11px;color:var(--dim);background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:2px 9px}
+  .list{flex:1;overflow-y:auto;padding:10px}
+  .empty{color:var(--dim);font-size:12.5px;text-align:center;padding:40px 20px;line-height:1.6}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 11px;margin-bottom:9px}
+  .card .top{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .card .name{font-size:11px;color:var(--dim);font-weight:600}
+  .card .x{margin-left:auto;display:flex;gap:6px}
+  .icon{cursor:pointer;color:var(--dim);border:1px solid var(--line);border-radius:6px;
+    width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px;background:#0d1520}
+  .icon:hover{color:var(--ink);border-color:var(--accent)}
+  .icon.del:hover{color:var(--danger);border-color:var(--danger)}
+  .eq{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;color:#dbe7f2;
+    word-break:break-all;line-height:1.5}
+  .eq .res{color:var(--dim)}
+  .foot{padding:11px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:7px}
+  .copyall{background:var(--ok);color:#062012;font-weight:700;border:none;border-radius:9px;padding:11px;cursor:pointer;font-size:13px}
+  .copyall:hover{filter:brightness(1.08)}
+  .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--ok);color:#062012;
+    font-weight:600;padding:9px 16px;border-radius:9px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:20}
+  .toast.show{opacity:1}
+  @media(max-width:900px){.app{grid-template-columns:1fr}.rail,.out{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- LEFT -->
+  <div class="rail">
+    <div class="brand">
+      <h1>Graph<span>Trace</span></h1>
+      <p>Trace an image into Desmos using only the 5 algebra forms. Click points, get equations.</p>
+    </div>
+
+    <div class="sec">
+      <label class="up" for="file">↑ Upload image</label>
+      <input id="file" type="file" accept="image/*" hidden>
+      <div class="lab"><span>Image opacity</span><span id="opv">55%</span></div>
+      <input id="opacity" type="range" min="0" max="100" value="55">
+      <div class="lab"><span>Image size</span></div>
+      <input id="imgscale" type="range" min="2" max="40" value="16">
+    </div>
+
+    <div class="sec">
+      <h2>Curve tools</h2>
+      <button class="btn tool on" data-tool="line-si"><span class="swatch" style="background:#4dabf7"></span>Slope-intercept<span class="k">1</span></button>
+      <button class="btn tool" data-tool="std"><span class="swatch" style="background:#ff6b6b"></span>Standard<span class="k">2</span></button>
+      <button class="btn tool" data-tool="vertex"><span class="swatch" style="background:#51cf66"></span>Vertex<span class="k">3</span></button>
+      <button class="btn tool" data-tool="intercept"><span class="swatch" style="background:#ffd43b"></span>Intercept<span class="k">4</span></button>
+      <button class="btn tool" data-tool="inverse"><span class="swatch" style="background:#cc5de8"></span>Inverse<span class="k">5</span></button>
+      <button class="btn tool" data-tool="circle"><span class="swatch" style="background:#ff922b"></span>Circle<span class="k">6</span></button>
+      <p style="font-size:11px;color:var(--dim);margin:8px 2px 0;line-height:1.5">Standard · Vertex · Intercept all draw <b style="color:#9fb4c7">parabolas</b>.</p>
+    </div>
+
+    <div class="sec">
+      <h2>Navigate</h2>
+      <button class="btn tool" data-tool="view">✥ Pan / view<span class="k">V</span></button>
+      <button class="btn tool" data-tool="move-img">▨ Move image<span class="k">M</span></button>
+      <p style="font-size:11px;color:var(--dim);margin:8px 2px 0;line-height:1.5">
+        Right-drag or scroll-drag pans anytime. Wheel = zoom.</p>
+    </div>
+
+    <div class="sec">
+      <h2>Edit</h2>
+      <div class="mini">
+        <button class="btn" id="undo" style="justify-content:center">↺ Undo</button>
+        <button class="btn" id="clear" style="justify-content:center">✕ Clear</button>
+      </div>
+      <button class="btn" id="reset" style="justify-content:center;margin-top:6px">⊹ Reset view</button>
+    </div>
+  </div>
+
+  <!-- CANVAS -->
+  <div class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="drop" id="drop">Drop image to trace</div>
+    <div class="hint">
+      <span class="dot"></span>
+      <span id="hinttext">Pick a tool, then click points on the grid.</span>
+      <span class="coord" id="coord">0.00, 0.00</span>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="out">
+    <h2>Equations <span class="count" id="count">0</span></h2>
+    <div class="list" id="list">
+      <div class="empty" id="empty">
+        No curves yet.<br><br>
+        Upload an image, choose a form on the left,<br>and click to place points.<br><br>
+        Each curve exports as paste-ready Desmos with a domain restriction.
+      </div>
+    </div>
+    <div class="foot">
+      <button class="copyall" id="copyall">⧉ Copy all for Desmos</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(()=>{
+"use strict";
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const stage=document.getElementById('stage');
+
+// ---------- state ----------
+const COLORS={'line-si':'#4dabf7','std':'#ff6b6b','vertex':'#51cf66','intercept':'#ffd43b','inverse':'#cc5de8','circle':'#ff922b'};
+const state={
+  tool:'line-si',
+  view:{ox:0,oy:0,scale:40},        // ox,oy = world coords at canvas centre; scale = px/unit
+  img:null, imgT:{x:-8,y:8,w:16},   // image world top-left + world width
+  opacity:0.55,
+  curves:[], pending:[],
+  mouse:{x:0,y:0}
+};
+
+// tool metadata: needed points + instructions
+const TOOLS={
+  'line-si':  {n:2, name:'Slope-intercept', hint:'Click <b>2 points</b> on a line.'},
+  'std':      {n:3, name:'Standard',        hint:'Click <b>3 points</b> along a parabola.'},
+  'vertex':   {n:2, name:'Vertex',          hint:'Click the <b>vertex</b>, then <b>one point</b> on the curve.'},
+  'intercept':{n:3, name:'Intercept',       hint:'Click <b>2 x-intercepts</b>, then a <b>point on the curve</b>.'},
+  'inverse':  {n:3, name:'Inverse',         hint:'Click <b>3 points</b> along a 1/x curve (same branch).'},
+  'circle':   {n:2, name:'Circle',          hint:'Click the <b>center</b>, then a point on the <b>edge</b>.'},
+  'view':     {n:0, name:'Pan',             hint:'Drag to pan. Wheel to zoom.'},
+  'move-img': {n:0, name:'Move image',      hint:'Drag the image to reposition it.'}
+};
+
+// ---------- coordinate transforms ----------
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR=window.devicePixelRatio||1;
+  W=stage.clientWidth; H=stage.clientHeight;
+  cv.width=W*DPR; cv.height=H*DPR;
+  cv.style.width=W+'px'; cv.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  draw();
+}
+const w2s=(wx,wy)=>[ W/2+(wx-state.view.ox)*state.view.scale, H/2-(wy-state.view.oy)*state.view.scale ];
+const s2w=(sx,sy)=>[ state.view.ox+(sx-W/2)/state.view.scale, state.view.oy-(sy-H/2)/state.view.scale ];
+
+// ---------- number / equation formatting ----------
+function fmt(n){
+  if(!isFinite(n)) return '∞';
+  if(Math.abs(n)<1e-9) return '0';
+  let r=Math.round(n*1000)/1000;
+  if(Math.abs(r-Math.round(r))<1e-9) return String(Math.round(r));
+  return String(r);
+}
+function term(c,v,first){
+  if(Math.abs(c)<1e-9) return '';
+  const s=c<0?'-':(first?'':'+');
+  let m=fmt(Math.abs(c));
+  if(v && m==='1') m='';
+  return s+m+v;
+}
+function poly(terms){
+  let out='',first=true;
+  for(const t of terms){ const s=term(t.c,t.v,first); if(s){out+=s;first=false;} }
+  return 'y='+(out||'0');
+}
+const aStr=a=> Math.abs(a-1)<1e-9?'':Math.abs(a+1)<1e-9?'-':fmt(a);
+function factor(h){ return factorV('x',h); }
+function factorV(v,c){
+  const cc=fmt(Math.abs(c));
+  return c>1e-9?`(${v}-${cc})`:c<-1e-9?`(${v}+${cc})`:`(${v})`;
+}
+const konst=k=> Math.abs(k)<1e-9?'':(k>0?'+':'-')+fmt(Math.abs(k));
+
+// ---------- linear solvers ----------
+function solve2(a,b,c, d,e,f){ // ax+by=c ; dx+ey=f
+  const det=a*e-b*d; if(Math.abs(det)<1e-12) return null;
+  return [ (c*e-b*f)/det, (a*f-c*d)/det ];
+}
+
+// ---------- build a curve from placed points ----------
+function build(tool,pts){
+  try{
+  if(tool==='line-si'){
+    const [p,q]=pts;
+    if(Math.abs(q.x-p.x)<1e-9) return {err:'Vertical line — can’t write as y=mx+b.'};
+    const m=(q.y-p.y)/(q.x-p.x), b=p.y-m*p.x;
+    const xr=[Math.min(p.x,q.x),Math.max(p.x,q.x)];
+    return curve(tool, poly([{c:m,v:'x'},{c:b,v:''}]), x=>m*x+b, xr, pts);
+  }
+  if(tool==='std'){
+    const [A,B,C]=pts;
+    // solve a,b,c for a x^2+b x+c through 3 pts
+    const M=[[A.x*A.x,A.x,1],[B.x*B.x,B.x,1],[C.x*C.x,C.x,1]];
+    const sol=solve3(M,[A.y,B.y,C.y]);
+    if(!sol) return {err:'Those 3 points don’t define a parabola.'};
+    const [a,b,c]=sol;
+    const xs=pts.map(p=>p.x), xr=[Math.min(...xs),Math.max(...xs)];
+    return curve(tool, poly([{c:a,v:'x^2'},{c:b,v:'x'},{c:c,v:''}]), x=>a*x*x+b*x+c, xr, pts);
+  }
+  if(tool==='vertex'){
+    const [V,P]=pts;
+    const h=V.x,k=V.y;
+    if(Math.abs(P.x-h)<1e-9) return {err:'Second point can’t be directly above the vertex.'};
+    const a=(P.y-k)/((P.x-h)*(P.x-h));
+    const hw=Math.abs(P.x-h), xr=[h-hw,h+hw];
+    const eq='y='+aStr(a)+factor(h)+'^2'+konst(k);
+    return curve(tool, eq, x=>a*(x-h)*(x-h)+k, xr, pts);
+  }
+  if(tool==='intercept'){
+    const [R1,R2,T]=pts;
+    const p=R1.x,q=R2.x;
+    if(Math.abs((T.x-p)*(T.x-q))<1e-9) return {err:'The through-point sits on a root.'};
+    const a=T.y/((T.x-p)*(T.x-q));
+    const xs=[p,q,T.x], xr=[Math.min(...xs),Math.max(...xs)];
+    const eq='y='+aStr(a)+factor(p)+factor(q);
+    return curve(tool, eq, x=>a*(x-p)*(x-q), xr, pts);
+  }
+  if(tool==='inverse'){
+    const [P1,P2,P3]=pts;
+    // (yi-k)(xi-h)=a  ->  xi*yi - h*yi - k*xi = a  -> pairwise linear in h,k
+    // xi*yi - xj*yj = h(yi-yj) + k(xi-xj)
+    const sol=solve2(
+      (P1.y-P2.y),(P1.x-P2.x), P1.x*P1.y-P2.x*P2.y,
+      (P1.y-P3.y),(P1.x-P3.x), P1.x*P1.y-P3.x*P3.y);
+    if(!sol) return {err:'Those points don’t define a 1/x curve.'};
+    const [h,k]=sol;
+    const a=(P1.y-k)*(P1.x-h);
+    if(Math.abs(a)<1e-9) return {err:'Degenerate inverse (a≈0).'};
+    const xs=pts.map(p=>p.x), xr=[Math.min(...xs),Math.max(...xs)];
+    const eq='y='+fmt(a)+'/'+factor(h)+konst(k);
+    return curve(tool, eq, x=>a/(x-h)+k, xr, pts);
+  }
+  if(tool==='circle'){
+    const [C,E]=pts;
+    const h=C.x,k=C.y,r=Math.hypot(E.x-h,E.y-k);
+    if(r<1e-6) return {err:'Radius is zero — click a point away from the center.'};
+    const eq=`${factorV('x',h)}^2+${factorV('y',k)}^2=${fmt(r*r)}`;
+    return {tool,eq,circle:{h,k,r},pts:pts.map(p=>({x:p.x,y:p.y})),
+            color:COLORS.circle,desmos:eq,restr:''};
+  }
+  }catch(e){ return {err:'Could not fit those points.'}; }
+}
+function solve3(M,r){
+  const d=det3(M); if(Math.abs(d)<1e-12) return null;
+  const out=[];
+  for(let i=0;i<3;i++){
+    const Mi=M.map(row=>row.slice());
+    for(let j=0;j<3;j++) Mi[j][i]=r[j];
+    out.push(det3(Mi)/d);
+  }
+  return out;
+}
+function det3(m){
+  return m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1])
+       - m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0])
+       + m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]);
+}
+function curve(tool,eq,fn,xr,pts){
+  const restr=` {${fmt(xr[0])}<x<${fmt(xr[1])}}`;
+  return {tool,eq,fn,xr,pts:pts.map(p=>({x:p.x,y:p.y})),color:COLORS[tool],desmos:eq+restr,restr};
+}
+
+// ---------- drawing ----------
+function niceStep(){
+  const target=70/state.view.scale; // world units per ~70px
+  const pow=Math.pow(10,Math.floor(Math.log10(target)));
+  const c=target/pow;
+  const m = c<1.5?1 : c<3.5?2 : c<7.5?5 : 10;
+  return m*pow;
+}
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // background
+  ctx.fillStyle='#0d1117'; ctx.fillRect(0,0,W,H);
+
+  // image
+  if(state.img){
+    const [sx,sy]=w2s(state.imgT.x,state.imgT.y);
+    const sw=state.imgT.w*state.view.scale;
+    const sh=sw*(state.img.height/state.img.width);
+    ctx.globalAlpha=state.opacity;
+    ctx.imageSmoothingQuality='high';
+    ctx.drawImage(state.img,sx,sy,sw,sh);
+    ctx.globalAlpha=1;
+  }
+
+  drawGrid();
+
+  // finished curves
+  for(const c of state.curves){ if(c.circle) drawCircle(c); else plot(c.fn,c.xr,c.color,2.4); }
+  // control points of finished curves (faint)
+  for(const c of state.curves) for(const p of c.pts) marker(p,c.color,2.5,.5);
+
+  // pending preview
+  const t=TOOLS[state.tool];
+  if(t && t.n){
+    for(const p of state.pending) marker(p,COLORS[state.tool],4,1);
+    if(state.pending.length===t.n){ /* handled elsewhere */ }
+  }
+}
+function drawGrid(){
+  const step=niceStep();
+  const [wl,wt]=s2w(0,0), [wr,wb]=s2w(W,H);
+  ctx.lineWidth=1;
+  ctx.font='11px ui-monospace,Menlo,monospace';
+  ctx.textBaseline='top';
+  // minor
+  const sub=step/5;
+  ctx.strokeStyle='#152230';
+  gridLines(wl,wr,wb,wt,sub,false);
+  // major
+  ctx.strokeStyle='#20303f';
+  gridLines(wl,wr,wb,wt,step,false);
+  // axes
+  ctx.strokeStyle='#3d5468'; ctx.lineWidth=1.6;
+  const [ax,ay]=w2s(0,0);
+  ctx.beginPath();
+  if(ax>=0&&ax<=W){ctx.moveTo(ax,0);ctx.lineTo(ax,H);}
+  if(ay>=0&&ay<=H){ctx.moveTo(0,ay);ctx.lineTo(W,ay);}
+  ctx.stroke();
+  // labels
+  ctx.fillStyle='#6f889c';
+  const startX=Math.ceil(wl/step)*step;
+  for(let x=startX;x<wr;x+=step){
+    if(Math.abs(x)<1e-9) continue;
+    const [px]=w2s(x,0);
+    let py=Math.min(Math.max(w2s(0,0)[1]+4,4),H-16);
+    ctx.fillText(fmt(x),px+3,py);
+  }
+  const startY=Math.ceil(wb/step)*step;
+  for(let y=startY;y<wt;y+=step){
+    if(Math.abs(y)<1e-9) continue;
+    const [,py]=w2s(0,y);
+    let px=Math.min(Math.max(w2s(0,0)[0]+5,4),W-30);
+    ctx.fillText(fmt(y),px,py-6);
+  }
+  ctx.fillText('0',w2s(0,0)[0]+4,w2s(0,0)[1]+4);
+}
+function gridLines(wl,wr,wb,wt,step){
+  ctx.beginPath();
+  const sx=Math.ceil(wl/step)*step;
+  for(let x=sx;x<wr;x+=step){ const [px]=w2s(x,0); ctx.moveTo(px,0); ctx.lineTo(px,H); }
+  const sy=Math.ceil(wb/step)*step;
+  for(let y=sy;y<wt;y+=step){ const [,py]=w2s(0,y); ctx.moveTo(0,py); ctx.lineTo(W,py); }
+  ctx.stroke();
+}
+function plot(fn,xr,color,lw){
+  const N=400; ctx.lineWidth=lw; ctx.strokeStyle=color;
+  ctx.lineJoin='round';
+  ctx.beginPath(); let pen=false;
+  for(let i=0;i<=N;i++){
+    const x=xr[0]+(xr[1]-xr[0])*i/N;
+    const y=fn(x);
+    if(!isFinite(y)||Math.abs(y)>1e6){ pen=false; continue; }
+    const [sx,sy]=w2s(x,y);
+    if(Math.abs(sy)>1e6){pen=false;continue;}
+    if(!pen){ctx.moveTo(sx,sy);pen=true;} else ctx.lineTo(sx,sy);
+  }
+  ctx.stroke();
+}
+function drawCircle(c){
+  const [sx,sy]=w2s(c.circle.h,c.circle.k);
+  ctx.lineWidth=2.4; ctx.strokeStyle=c.color; ctx.lineJoin='round';
+  ctx.beginPath(); ctx.arc(sx,sy,Math.max(0,c.circle.r*state.view.scale),0,Math.PI*2); ctx.stroke();
+}
+function marker(p,color,r,alpha){
+  const [sx,sy]=w2s(p.x,p.y);
+  ctx.globalAlpha=alpha;
+  ctx.fillStyle=color; ctx.strokeStyle='#0d1117'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(sx,sy,r,0,7); ctx.fill(); ctx.stroke();
+  ctx.globalAlpha=1;
+}
+
+// ---------- interaction ----------
+let down=null,last=null,moved=false,btn=0;
+cv.addEventListener('mousedown',e=>{
+  down={x:e.offsetX,y:e.offsetY}; last={...down}; moved=false; btn=e.button;
+});
+cv.addEventListener('mousemove',e=>{
+  const [wx,wy]=s2w(e.offsetX,e.offsetY);
+  state.mouse={x:wx,y:wy};
+  document.getElementById('coord').textContent=`${wx.toFixed(2)}, ${wy.toFixed(2)}`;
+  if(down){
+    const dx=e.offsetX-last.x, dy=e.offsetY-last.y;
+    if(Math.hypot(e.offsetX-down.x,e.offsetY-down.y)>4) moved=true;
+    if(moved){
+      const panning = btn!==0 || state.tool==='view' || (state.tool!=='move-img');
+      if(state.tool==='move-img' && btn===0){
+        state.imgT.x+=dx/state.view.scale; state.imgT.y-=dy/state.view.scale;
+      } else {
+        state.view.ox-=dx/state.view.scale; state.view.oy+=dy/state.view.scale;
+      }
+      last={x:e.offsetX,y:e.offsetY};
+      draw();
+    }
+  }
+});
+window.addEventListener('mouseup',e=>{
+  if(down && !moved){
+    const t=TOOLS[state.tool];
+    if(t && t.n){ placePoint(down.x,down.y); }
+  }
+  down=null;
+});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const [wx,wy]=s2w(e.offsetX,e.offsetY);
+  const f=e.deltaY<0?1.12:1/1.12;
+  state.view.scale=Math.max(4,Math.min(400,state.view.scale*f));
+  // keep cursor point fixed
+  const [nx,ny]=s2w(e.offsetX,e.offsetY);
+  state.view.ox+=wx-nx; state.view.oy+=wy-ny;
+  draw();
+},{passive:false});
+
+function placePoint(sx,sy){
+  const [wx,wy]=s2w(sx,sy);
+  let x=wx,y=wy;
+  // snap x-intercepts to y=0 for the first two clicks of Intercept
+  if(state.tool==='intercept' && state.pending.length<2) y=0;
+  state.pending.push({x,y});
+  const need=TOOLS[state.tool].n;
+  if(state.pending.length>=need){
+    const res=build(state.tool,state.pending);
+    if(res.err){ toast(res.err,true); }
+    else{ state.curves.push(res); renderList(); }
+    state.pending=[];
+  }
+  draw(); updateHint();
+}
+
+// ---------- tools / buttons ----------
+function setTool(t){
+  state.tool=t; state.pending=[];
+  document.querySelectorAll('.tool').forEach(b=>b.classList.toggle('on',b.dataset.tool===t));
+  cv.style.cursor = (t==='view'||t==='move-img')?'grab':'crosshair';
+  updateHint(); draw();
+}
+document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>setTool(b.dataset.tool)));
+function updateHint(){
+  const t=TOOLS[state.tool];
+  let h=t.hint;
+  if(t.n){ const left=t.n-state.pending.length; h+=` &nbsp;·&nbsp; <b>${left}</b> left`; }
+  document.getElementById('hinttext').innerHTML=h;
+}
+
+document.getElementById('undo').onclick=()=>{
+  if(state.pending.length){ state.pending.pop(); }
+  else if(state.curves.length){ state.curves.pop(); renderList(); }
+  draw(); updateHint();
+};
+document.getElementById('clear').onclick=()=>{
+  if(!state.curves.length && !state.pending.length) return;
+  state.curves=[]; state.pending=[]; renderList(); draw(); updateHint();
+};
+document.getElementById('reset').onclick=()=>{ state.view={ox:0,oy:0,scale:40}; draw(); };
+
+// keyboard
+window.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT') return;
+  const map={'1':'line-si','2':'std','3':'vertex','4':'intercept','5':'inverse','6':'circle','v':'view','m':'move-img'};
+  const k=e.key.toLowerCase();
+  if(map[k]) setTool(map[k]);
+  if(k==='u'){ document.getElementById('undo').click(); }
+  if(k==='escape'){ state.pending=[]; draw(); updateHint(); }
+});
+
+// ---------- image upload ----------
+const fileInput=document.getElementById('file');
+fileInput.addEventListener('change',e=>{ if(e.target.files[0]) loadImg(e.target.files[0]); });
+function loadImg(file){
+  const url=URL.createObjectURL(file);
+  const im=new Image();
+  im.onload=()=>{
+    state.img=im;
+    const w=parseFloat(document.getElementById('imgscale').value);
+    state.imgT.w=w;
+    state.imgT.x=-w/2;
+    state.imgT.y=(w*im.height/im.width)/2;
+    draw();
+    toast('Image loaded — start tracing');
+  };
+  im.src=url;
+}
+// drag & drop + paste
+const drop=document.getElementById('drop');
+['dragenter','dragover'].forEach(ev=>stage.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('show');}));
+['dragleave','drop'].forEach(ev=>stage.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('show');}));
+stage.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f&&f.type.startsWith('image')) loadImg(f); });
+window.addEventListener('paste',e=>{
+  for(const it of e.clipboardData.items){ if(it.type.startsWith('image')){ loadImg(it.getAsFile()); } }
+});
+
+document.getElementById('opacity').oninput=e=>{
+  state.opacity=e.target.value/100;
+  document.getElementById('opv').textContent=e.target.value+'%'; draw();
+};
+document.getElementById('imgscale').oninput=e=>{
+  const nw=parseFloat(e.target.value);
+  if(state.img){
+    // keep centre fixed
+    const cx=state.imgT.x+state.imgT.w/2;
+    const ch=state.imgT.w*state.img.height/state.img.width;
+    const cy=state.imgT.y-ch/2;
+    state.imgT.w=nw;
+    const nh=nw*state.img.height/state.img.width;
+    state.imgT.x=cx-nw/2; state.imgT.y=cy+nh/2;
+  } else state.imgT.w=nw;
+  draw();
+};
+
+// ---------- output list ----------
+const NAMES={'line-si':'Slope-intercept','std':'Standard','vertex':'Vertex','intercept':'Intercept','inverse':'Inverse','circle':'Circle'};
+function renderList(){
+  const list=document.getElementById('list');
+  document.getElementById('count').textContent=state.curves.length;
+  if(!state.curves.length){ list.innerHTML=`<div class="empty" id="empty">No curves yet.<br><br>Upload an image, choose a form on the left,<br>and click to place points.<br><br>Each curve exports as paste-ready Desmos with a domain restriction.</div>`; return; }
+  list.innerHTML='';
+  state.curves.forEach((c,i)=>{
+    const el=document.createElement('div'); el.className='card';
+    el.innerHTML=`
+      <div class="top">
+        <span class="swatch" style="background:${c.color}"></span>
+        <span class="name">${NAMES[c.tool]}</span>
+        <span class="x">
+          <span class="icon" title="Copy">⧉</span>
+          <span class="icon del" title="Delete">✕</span>
+        </span>
+      </div>
+      <div class="eq">${escapeHtml(c.eq)}<span class="res">${escapeHtml(c.restr)}</span></div>`;
+    el.querySelector('.icon:not(.del)').onclick=()=>copy(c.desmos,'Equation copied');
+    el.querySelector('.icon.del').onclick=()=>{ state.curves.splice(i,1); renderList(); draw(); };
+    list.appendChild(el);
+  });
+}
+document.getElementById('copyall').onclick=()=>{
+  if(!state.curves.length) return toast('Nothing to copy yet',true);
+  copy(state.curves.map(c=>c.desmos).join('\n'), `${state.curves.length} equations copied — paste into Desmos`);
+};
+function copy(text,msg){
+  navigator.clipboard.writeText(text).then(()=>toast(msg)).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();
+    document.execCommand('copy');ta.remove();toast(msg);
+  });
+}
+function escapeHtml(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+
+// ---------- toast ----------
+let toastT;
+function toast(msg,bad){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.style.background=bad?'#ff6b6b':'var(--ok)'; el.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),1900);
+}
+
+// ---------- boot ----------
+window.addEventListener('resize',resize);
+resize(); setTool('line-si'); renderList();
+})();
+</script>
+</body>
+</html>
