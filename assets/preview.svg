@@ -1,0 +1,107 @@
+<svg width="1200" height="720" viewBox="0 0 1200 720" fill="none" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-label="GraphTrace interface">
+  <defs>
+    <linearGradient id="pbg" x1="0" y1="0" x2="1200" y2="720" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0c0e16"/><stop offset="1" stop-color="#070810"/>
+    </linearGradient>
+    <linearGradient id="btn" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#7c6cff"/><stop offset="1" stop-color="#8f7dff"/></linearGradient>
+    <linearGradient id="crv" x1="440" y1="0" x2="760" y2="0" gradientUnits="userSpaceOnUse"><stop stop-color="#34e0c8"/><stop offset="1" stop-color="#7c6cff"/></linearGradient>
+    <linearGradient id="plogo" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#7c6cff"/><stop offset="0.55" stop-color="#34e0c8"/><stop offset="1" stop-color="#ff7a59"/></linearGradient>
+    <filter id="ps" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="5"/></filter>
+  </defs>
+
+  <!-- window -->
+  <rect x="8" y="8" width="1184" height="704" rx="20" fill="url(#pbg)"/>
+  <rect x="8.5" y="8.5" width="1183" height="703" rx="19.5" stroke="#1e2130"/>
+  <circle cx="40" cy="38" r="6" fill="#ff5f57"/><circle cx="62" cy="38" r="6" fill="#febc2e"/><circle cx="84" cy="38" r="6" fill="#28c840"/>
+  <line x1="8" y1="64" x2="1192" y2="64" stroke="#1e2130"/>
+
+  <!-- ===== left panel ===== -->
+  <line x1="300" y1="64" x2="300" y2="712" stroke="#1e2130"/>
+  <!-- brand -->
+  <rect x="28" y="86" width="30" height="30" rx="9" fill="url(#plogo)"/>
+  <rect x="31" y="89" width="24" height="24" rx="7" fill="#0a0c12"/>
+  <path d="M40 108 Q46 92 52 100" stroke="#34e0c8" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+  <text x="68" y="100" fill="#f4f5f8" font-size="16" font-weight="700">Graph<tspan fill="#7c6cff">Trace</tspan></text>
+  <text x="28" y="132" fill="#6b7280" font-size="11">Trace an image into Desmos.</text>
+  <text x="28" y="147" fill="#6b7280" font-size="11">Click points, get equations.</text>
+
+  <!-- upload -->
+  <rect x="28" y="162" width="244" height="40" rx="11" fill="#1a1d2b" stroke="#2a2f42"/>
+  <text x="150" y="187" text-anchor="middle" fill="#aeb4c2" font-size="13" font-weight="600">↑  Upload image</text>
+
+  <!-- auto-trace -->
+  <text x="30" y="232" fill="#6b7280" font-size="10" font-weight="700" letter-spacing="1.4">✨ AUTO-TRACE</text>
+  <rect x="28" y="244" width="244" height="46" rx="12" fill="url(#btn)"/>
+  <text x="150" y="272" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="600">✨ Auto-trace image → graphs</text>
+  <!-- sliders -->
+  <text x="28" y="316" fill="#8b93a5" font-size="11">Ink threshold</text>
+  <rect x="28" y="326" width="244" height="5" rx="3" fill="#1a1d2b"/><circle cx="150" cy="328.5" r="7" fill="#7c6cff"/>
+  <text x="28" y="356" fill="#8b93a5" font-size="11">Detail</text>
+  <rect x="28" y="366" width="244" height="5" rx="3" fill="#1a1d2b"/><circle cx="120" cy="368.5" r="7" fill="#7c6cff"/>
+
+  <!-- curve tools -->
+  <text x="30" y="416" fill="#6b7280" font-size="10" font-weight="700" letter-spacing="1.4">CURVE TOOLS</text>
+  <g font-size="12.5">
+    <rect x="28" y="428" width="244" height="34" rx="9" fill="#7c6cff" fill-opacity="0.13" stroke="#7c6cff" stroke-opacity="0.5"/>
+    <rect x="40" y="440" width="10" height="10" rx="2" fill="#63c7ff"/><text x="60" y="449" fill="#f4f5f8" font-weight="600">Slope-intercept</text><text x="258" y="449" text-anchor="end" fill="#6b7280">1</text>
+    <rect x="40" y="474" width="10" height="10" rx="2" fill="#ff6b8a"/><text x="60" y="483" fill="#aeb4c2">Standard</text><text x="258" y="483" text-anchor="end" fill="#6b7280">2</text>
+    <rect x="40" y="506" width="10" height="10" rx="2" fill="#34e0c8"/><text x="60" y="515" fill="#aeb4c2">Vertex</text><text x="258" y="515" text-anchor="end" fill="#6b7280">3</text>
+    <rect x="40" y="538" width="10" height="10" rx="2" fill="#ffcf5c"/><text x="60" y="547" fill="#aeb4c2">Intercept</text><text x="258" y="547" text-anchor="end" fill="#6b7280">4</text>
+    <rect x="40" y="570" width="10" height="10" rx="2" fill="#a996ff"/><text x="60" y="579" fill="#aeb4c2">Inverse</text><text x="258" y="579" text-anchor="end" fill="#6b7280">5</text>
+    <rect x="40" y="602" width="10" height="10" rx="2" fill="#ff7a59"/><text x="60" y="611" fill="#aeb4c2">Cubic · Circle · +5 more</text>
+  </g>
+
+  <!-- ===== center canvas ===== -->
+  <line x1="852" y1="64" x2="852" y2="712" stroke="#1e2130"/>
+  <!-- grid -->
+  <g stroke="#ffffff" stroke-opacity="0.04">
+    <line x1="360" y1="80" x2="360" y2="660"/><line x1="440" y1="80" x2="440" y2="660"/><line x1="520" y1="80" x2="520" y2="660"/><line x1="680" y1="80" x2="680" y2="660"/><line x1="760" y1="80" x2="760" y2="660"/><line x1="840" y1="80" x2="840" y2="660"/>
+    <line x1="316" y1="160" x2="852" y2="160"/><line x1="316" y1="240" x2="852" y2="240"/><line x1="316" y1="400" x2="852" y2="400"/><line x1="316" y1="480" x2="852" y2="480"/><line x1="316" y1="560" x2="852" y2="560"/>
+  </g>
+  <!-- axes -->
+  <line x1="316" y1="320" x2="852" y2="320" stroke="#2a2f42"/><line x1="600" y1="80" x2="600" y2="660" stroke="#2a2f42"/>
+  <g fill="#454b58" font-size="10" font-family="'JetBrains Mono',monospace">
+    <text x="440" y="336">-2</text><text x="756" y="336">2</text><text x="606" y="176">4</text><text x="606" y="496">-4</text>
+  </g>
+  <!-- traced image silhouette -->
+  <path d="M440 500 Q600 120 760 500" stroke="#ffffff" stroke-opacity="0.10" stroke-width="22" fill="none" stroke-linecap="round"/>
+  <!-- fitted curve -->
+  <path d="M440 500 Q600 120 760 500" stroke="url(#crv)" stroke-width="6" fill="none" stroke-linecap="round" filter="url(#ps)" opacity="0.65"/>
+  <path d="M440 500 Q600 120 760 500" stroke="url(#crv)" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <!-- points -->
+  <circle cx="440" cy="500" r="6.5" fill="#0c0e16" stroke="#34e0c8" stroke-width="3"/>
+  <circle cx="600" cy="310" r="6.5" fill="#0c0e16" stroke="#7c6cff" stroke-width="3"/>
+  <circle cx="760" cy="500" r="6.5" fill="#0c0e16" stroke="#ff7a59" stroke-width="3"/>
+  <!-- status bar -->
+  <rect x="316" y="672" width="536" height="30" fill="#0f1119"/>
+  <circle cx="336" cy="687" r="4" fill="#34e0c8"/>
+  <text x="348" y="691" fill="#aeb4c2" font-size="11.5">Click <tspan fill="#7c6cff" font-weight="600">3 points</tspan> on the parabola  ·  1 left</text>
+  <text x="836" y="691" text-anchor="end" fill="#6b7280" font-size="11" font-family="'JetBrains Mono',monospace">-0.42, 3.10</text>
+
+  <!-- ===== right panel: equations ===== -->
+  <text x="880" y="96" fill="#f4f5f8" font-size="15" font-weight="700">Equations</text>
+  <rect x="1140" y="82" width="26" height="20" rx="6" fill="#7c6cff" fill-opacity="0.18"/><text x="1153" y="96" text-anchor="middle" fill="#b3a9ff" font-size="11" font-weight="700">3</text>
+  <line x1="868" y1="116" x2="1164" y2="116" stroke="#1e2130"/>
+
+  <!-- equation cards -->
+  <g font-family="'JetBrains Mono',monospace">
+    <rect x="880" y="136" width="272" height="66" rx="11" fill="#12141f" stroke="#2a2f42"/>
+    <rect x="880" y="136" width="4" height="66" rx="2" fill="#34e0c8"/>
+    <text x="898" y="160" fill="#f4f5f8" font-size="12.5">y = -0.18(x-0.3)² + 4.1</text>
+    <text x="898" y="182" fill="#6b7280" font-size="10.5">{-2.4 ≤ x ≤ 2.9}   Vertex</text>
+
+    <rect x="880" y="214" width="272" height="66" rx="11" fill="#12141f" stroke="#2a2f42"/>
+    <rect x="880" y="214" width="4" height="66" rx="2" fill="#63c7ff"/>
+    <text x="898" y="238" fill="#f4f5f8" font-size="12.5">y = 1.42x - 0.6</text>
+    <text x="898" y="260" fill="#6b7280" font-size="10.5">{-3 ≤ x ≤ -1}   Slope-intercept</text>
+
+    <rect x="880" y="292" width="272" height="66" rx="11" fill="#12141f" stroke="#2a2f42"/>
+    <rect x="880" y="292" width="4" height="66" rx="2" fill="#ff7a59"/>
+    <text x="898" y="316" fill="#f4f5f8" font-size="12.5">y = 0.9√(x-1) + 0.4</text>
+    <text x="898" y="338" fill="#6b7280" font-size="10.5">{x ≥ 1}   Square root</text>
+  </g>
+
+  <!-- copy all -->
+  <rect x="880" y="650" width="272" height="42" rx="11" fill="#34e0c8"/>
+  <text x="1016" y="676" text-anchor="middle" fill="#062018" font-size="13.5" font-weight="700">⧉  Copy all for Desmos</text>
+</svg>
